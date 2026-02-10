@@ -1,0 +1,15 @@
+# Python / AI
+__pycache__/
+*.py[cod]
+venv/
+.env
+.DS_Store
+
+# Node/JS (nếu backend dùng Node)
+node_modules/
+*.pt
+*.txt
+*.env
+Dockerfile
+*.pth
+*.ipynb
