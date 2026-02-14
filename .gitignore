@@ -13,3 +13,8 @@ node_modules/
 Dockerfile
 *.pth
 *.ipynb
+*.toml
+*.venv
+__pycache__
+*.lock
+*.python-version

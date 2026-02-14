@@ -40,8 +40,9 @@ class CrawlerService:
 
     def _get_product_info(self, pid: str, product_url: str, platform: str):
         if platform == "tiki":
+            url = f"https://tiki.vn/api/v2/products/{pid}"
             try:
-                res = requests.get(product_url, headers=self.tiki_headers)
+                res = requests.get(url, headers=self.tiki_headers)
                 data = res.json()
                 return {
                     "id": str(data.get("id")),
@@ -80,7 +81,7 @@ class CrawlerService:
 
     # FOR TIKI CRAWLING
     def _crawl_tiki_page(self, pid, page):
-        url = f"https://tiki.vn/api/v2/reviews?product_id={product_id}&limit=20&page={page}"
+        url = f"https://tiki.vn/api/v2/reviews?product_id={pid}&limit=20&page={page}"
         try:
             res = requests.get(url, headers=self.tiki_headers, timeout=10)
             if res.status_code == 200: return res.json().get("data", [])
@@ -88,11 +89,11 @@ class CrawlerService:
         return []
 
     # FOR ALIPAY CRAWLING
-    def _generate_deterministic_id(product_id, content, date_str):
+    def _generate_deterministic_id(self, product_id, content, date_str):
         raw_str = f"{product_id}_{content[:50]}_{date_str}"
         return hashlib.md5(raw_str.encode()).hexdigest()
 
-    def _norm_url(u: str):
+    def _norm_url(self, u: str):
         if not u: return ""
         u = u.replace("\\u002F", "/")
         if u.startswith("//"): u = "https:" + u
@@ -186,27 +187,7 @@ class CrawlerService:
 
             return all_reviews, total_count
 
-    # Supabase Checking Duplicate Logic
-    def _check_product_status(product_id):
-        try:
-            res = db.client.table("products").select("id").eq("id", str(product_id)).execute()
-            if not res.data: return False, 0
-            count = db.client.table("raw_comment").select("id", count="exact", head=True).eq("product_id", str(product_id)).execute()
-            return True, count.count
-        except: return False, 0
-
-    def _save_product_info(product_data):
-        if not product_data: return False, "No Data"
-        try:
-            product_data["id"] = str(product_data["id"])
-            data = {
-                "id": product_data["id"], "name": product_data["name"],
-                "shop_name": product_data["shop_name"], "product_link": product_data["product_link"],
-                "product_images": product_data["product_images"], "created_at": datetime.now(timezone.utc).isoformat()
-            }
-            db.client.table("products").upsert(data).execute()
-            return True, "Success"
-        except Exception as e: return False, str(e)
+    
 
     def crawl(self, product_url: str):
         platform = self._get_platform(product_url)
@@ -215,7 +196,7 @@ class CrawlerService:
         if not pid:
             raise ValueError("Invalid URL or Platform")
 
-        exists, db_count = self._check_product_status(pid)
+        exists, db_count = db.check_product_status(pid)
 
         live_total = 0
         if platform == "tiki":
@@ -241,6 +222,7 @@ class CrawlerService:
 
         if not info: raise ValueError("Product Info Not Found")
 
+        db.save_product_info(info)
         imgs_saved, _ = db.save_raw_reviews_and_images(pid, revs)
 
         return {"status": "success", "product_id": pid, "total_reviews_crawled": len(revs), "total_images_saved": imgs_saved}
@@ -255,3 +237,8 @@ class CrawlerService:
         # db.upsert_reviews(reviews) -> Cần transform data đúng schema trước khi save
         
         return {"status": "success", "product_id": pid, "reviews_count": len(reviews)}
+
+if __name__ == "__main__":
+    crawler = CrawlerService()
+    crawl_res = crawler.crawl("https://tiki.vn/binh-giu-nhiet-inox-304-elmich-el-8013ol-dung-tich-480ml-p120552065.html?spid=120552067")
+    print(crawl_res)
