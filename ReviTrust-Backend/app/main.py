@@ -44,7 +44,7 @@ async def execute_pipeline(req: PipelineRequest):
     # BƯỚC 3: ANALYTICS & SCORING
     print("📊 Computing Analytics...")
     try:
-        final_result = analytics.compute_trust_score(product_id)
+        final_result = analytics.process_analytics(product_id)
         return {"status": "success", "data": final_result}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Analytics failed: {str(e)}")

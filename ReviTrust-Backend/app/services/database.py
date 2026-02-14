@@ -64,9 +64,9 @@ class DatabaseService:
     # Supabase Checking Duplicate Logic
     def check_product_status(self, product_id):
         try:
-            res = db.client.table("products").select("id").eq("id", str(product_id)).execute()
+            res = self.client.table("products").select("id").eq("id", str(product_id)).execute()
             if not res.data: return False, 0
-            count = db.client.table("raw_comment").select("id", count="exact", head=True).eq("product_id", str(product_id)).execute()
+            count = self.client.table("raw_comment").select("id", count="exact", head=True).eq("product_id", str(product_id)).execute()
             return True, count.count
         except: return False, 0
 
@@ -79,9 +79,53 @@ class DatabaseService:
                 "shop_name": product_data["shop_name"], "product_link": product_data["product_link"],
                 "product_images": product_data["product_images"], "created_at": datetime.now(timezone.utc).isoformat()
             }
-            db.client.table("products").upsert(data).execute()
+            self.client.table("products").upsert(data).execute()
             return True, "Success"
         except Exception as e: return False, str(e)
+
+    # For Analytics
+    # --- HELPER: FETCH ALL DATA ---
+    def fetch_all_rows_pagination(self, table_name, col_name, col_value, select="*"):
+        all_data = []
+        offset = 0
+        limit = 1000
+        while True:
+            try:
+                res = self.client.table(table_name).select(select).eq(col_name, str(col_value)).range(offset, offset + limit - 1).execute()
+                batch_data = res.data
+                if not batch_data: break
+                all_data.extend(batch_data)
+                if len(batch_data) < limit: break
+                offset += limit
+            except Exception as e:
+                print(f"   ⚠️ Error fetching {table_name}: {e}")
+                break
+        return all_data
+
+    
+
+    def get_product_name(self, product_id: str):
+        try:
+            res = self.client.table("products").select("name").eq("id", str(product_id)).execute()
+            if res.data: return res.data[0]['name']
+        except: pass
+        return "Unknown Product"
+
+    def fetch_all_in_list(self, table_name, col_in, list_values, select="*"):
+        all_data = []
+        CHUNK = 500
+        list_values = [str(v) for v in list_values]
+        # Deduplicate list_values trước khi query để tối ưu
+        list_values = list(set(list_values))
+
+        for i in range(0, len(list_values), CHUNK):
+            chunk = list_values[i:i+CHUNK]
+            try:
+                res = self.client.table(table_name).select(select).in_(col_in, chunk).execute()
+                if res.data: all_data.extend(res.data)
+            except Exception as e:
+                print(f"Error fetch_all_in_list: {e}")
+        return all_data
 
     #-----------------------------------------------------------------
     # def upsert_product(self, data: dict):
